@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>接收推送内容</title>
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+<h1>添加推送消息</h1>
+<ul class="list-group" id="list">
+<!--    <li class="list-group-item">a</li>-->
+</ul>
+<textarea name="message" id="message" cols="30" rows="10"></textarea>
+
+<submit type="button" id="send" class="btn btn-default">发送消息</submit>
+</body>
+<script src="https://cdn.jsdelivr.net/npm/jquery@1.12.4/dist/jquery.min.js"></script>
+<!-- 加载 Bootstrap 的所有 JavaScript 插件。你也可以根据需要只加载单个插件。 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js"></script>
+<script>
+    $(function(){
+        //连接上websocket
+        var wsServer = 'ws://192.168.10.10:9502';
+        var websocket = new WebSocket(wsServer);
+        //在按钮加上send message事件
+        websocket.onopen = function (evt) {
+            console.log("Connected to WebSocket server.");
+            // websocket.send("客户端发送给服务器消息");
+        };
+
+        websocket.onclose = function (evt) {
+            console.log("Disconnected");
+        };
+
+        websocket.onmessage = function (evt) {
+            var html = "<li class=\"list-group-item\">"+evt.data+"</li>";
+            $("#list").append(html);
+        };
+
+        websocket.onerror = function (evt, e) {
+            console.log('Error occured: ' + evt.data);
+        };
+        $("#send").on("click",function(){
+            // var message = $("#message").val();
+            websocket.send($("#message").val());
+            $("#message").val('');
+        })
+    })
+</script>
+</html>
