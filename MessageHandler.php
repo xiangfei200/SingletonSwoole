@@ -1,5 +1,5 @@
 <?php
-require './Database.php';
+
 
 /**
  * 处理消息
@@ -11,6 +11,7 @@ class MessageHandler{
 
     public function __construct()
     {
+        require 'Database.php';
         $this->database = new Database();
     }
 
@@ -26,9 +27,9 @@ class MessageHandler{
     public function content($client_id,$data){
         $content = $data['data'];
         $sql = "insert into im (client_id,data) VALUES (".$client_id.",'".$content."')";
+        var_dump($sql);
         $result = $this->database->exec($sql);
     }
-
 
     public function getHistoryList(){
         $sql = "select * from im";

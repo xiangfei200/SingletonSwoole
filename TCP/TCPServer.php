@@ -1,8 +1,8 @@
 <?php
 
-//创建单例模式类
-class Server{
-    //三私一公
+
+class TCPServer{
+
     private static $instance;
     private static $server;
     private $messageHandler;//处理消息
@@ -11,17 +11,17 @@ class Server{
     private function __construct()
     {
         //创建websocket对象
-        self::$server = new Swoole\WebSocket\Server("0.0.0.0", 9502);
+        self::$server = new \Swoole\Server("0.0.0.0", 9501);
         //注册事件
-        //监听WebSocket连接打开事件
-        self::$server->on('open', [$this,"onOpen"]);
+        //监听tcp连接进入事件
+        self::$server->on('Connect', [$this,"onConnect"]);
 
-        //监听WebSocket消息事件
-        self::$server->on('message', [$this,"onMessage"]);
+        //监听tcp数据接收事件
+        self::$server->on('Receive', [$this,"onReceive"]);
 
-        //监听WebSocket连接关闭事件
+        //监听tcp连接关闭事件
         //不管是服务器还是客户端，该函数都会执行
-        self::$server->on('close', [$this,"onClose"]);
+        self::$server->on('Close', [$this,"onClose"]);
 
         //在worker启动时自动加载处理消息的类
         //此事件在 Worker 进程 /Task 进程启动时发生，这里创建的对象可以在进程生命周期内使用。
@@ -48,33 +48,25 @@ class Server{
         return self::$instance;
     }
 
-    public function onOpen($ws, $request){
-        echo $request->fd."用户连接了";
+    public function onConnect($server, $fd){
+        echo $fd."用户连接了\n";
 //        var_dump($request->fd, $request->get, $request->server);
     }
 
-    public function onMessage($ws, $request){
-        self::$server->reload();  //热部署
-
-        echo "Message: {$request->data}\n";
-        //约定的json格式为{"cmd":"xx","data":"xxx"}
-        $data = json_decode($request->data,true);
-        if(method_exists($this->messageHandler,$data['cmd'])){
-            call_user_func([$this->messageHandler,$data['cmd']],$request->fd,$data);
-        }
-//        foreach ($ws->connections as $fd){
-//            $ws->push($fd, "{$request->data}");
-//        }
+    public function onReceive($server, $fd,$from_id,$data){
+//        self::$server->reload();  //热部署
+        echo "Message:接收到客户端ID：{$fd}发来的消息：{$data}\n";
+        $server->send($fd,"Server:接收到了消息:{$data}\n");
     }
 
-    public function onClose($ws, $fd){
+    public function onClose($server, $fd){
         echo "client-{$fd} is closed\n";
     }
 
 
     public function onWorkerStart(){
 //        echo "OnWorkerStart .......";
-        require "./MessageHandler.php";
+        require __DIR__ . '/../MessageHandler.php';
         $this->messageHandler = new MessageHandler();
     }
 
@@ -84,5 +76,4 @@ class Server{
     }
 }
 
-
-Server::getInstance()->start();
+TCPServer::getInstance()->start();
