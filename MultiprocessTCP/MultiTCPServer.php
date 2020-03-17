@@ -26,13 +26,13 @@ class MultiTCPServer{
     public function run(){
         $process = new \Swoole\Process(function(){
             $this->mpid = getmypid();
-            echo time()."Master process,pid {$this->mpid}";
+            echo time()."Master process,pid {$this->mpid}\n";
 
             //创建tcp服务器并获取套接字
             $this->socket = stream_socket_server("tcp://192.168.10.10:9503", $errno, $errstr);
 
             if (!$this->socket) {
-                exit("Server start error: $errstr --- $errno");
+                exit("Server start error: $errstr --- $errno\n");
             }
 
             //启动子进程处理请求
@@ -60,6 +60,11 @@ class MultiTCPServer{
                 sleep(1); //让出 1s 时间给CPU
             }
         },false, false);
+        //让当前进程变成一个守护进程
+        \Swoole\Process::daemon();
+        //执行fork系统调用，启动进程
+        //start之后的变量子进程里面是获取不到的
+        $process->start();
     }
 
 
@@ -84,6 +89,84 @@ class MultiTCPServer{
      * @param Process $worker
      */
     private function acceptClient(&$worker){
+        //子进程一直等待客户端连接
+        while (1){
+            //从主进程创建的网络套接字上获取连接
+            $conn = stream_socket_accept($this->socket,-1);
+            if($this->onConnect){
+                call_user_func($this->onConnect,$conn);
+            }
+            // 开始循环读取客户端请求消息
+            $recv = ''; // 实际收到的消息
+            $buffer = ''; // 缓冲消息
+            while(1){
+                $this->checkMpid($worker);
+                //读取客户端请求消息
+                $buffer = fread($conn,20);
 
+                //没有收到正常消息时，要关闭
+                if($buffer === false || $buffer === ''){
+                    if($this->onClose){
+                        call_user_func($this->onClose,$conn);
+                    }
+
+                    break;
+                }
+
+                //消息结束符的位置
+                $pos = strpos($buffer,"\n");
+                if($pos === false){
+                    $recv .= $buffer;
+                }else{
+                    $recv .= trim(substr($buffer,0,$pos+1));
+                    // 如果服务器定义了消息处理回调函数，则在当前连接上将消息传入回调函数并执行该回调
+                    if ($this->onMessage) {
+                        call_user_func($this->onMessage, $conn, $recv);
+                    }
+                    //如果接收到quit消息，表示关闭此连接，等待下一个客户端连接
+                    if($recv == "quit"){
+                        echo "Client close connection\n";
+                        fclose($conn);
+                        break;
+                    }
+                    $recv = ''; //清空消息，准备下一次接收
+                }
+            }
+        }
+    }
+
+    /**
+     * 如果主进程已退出，则子进程也退出，避免孤儿进程出现
+     * @param $worker
+     */
+    public function checkMpid(&$worker){
+        //检测子进程
+        if(!\Swoole\Process::kill($this->mpid,0)){
+            //退出子进程。
+            $worker->exit();
+            // 这句提示，实际是看不到的，需要写到日志中
+            echo "Master process exited, I [{$worker['pid']}] also quit\n";
+        }
     }
 }
+
+$server = new MultiTCPServer();
+
+$server->onConnect = function ($conn){
+    echo "onConnect -- accepted " . stream_socket_get_name($conn, true) . "\n";
+};
+
+// 定义收到消息回调函数
+$server->onMessage = function ($conn, $msg) {
+    echo "onMessage --" . $msg . "\n";
+    fwrite($conn, "received " . $msg . "\n");
+};
+
+
+// 定义连接关闭回调函数
+$server->onClose = function ($conn) {
+    echo "onClose --" . stream_socket_get_name($conn, true) . "\n";
+};
+
+// 启动服务器主进程
+$server->run();
