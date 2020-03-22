@@ -25,6 +25,8 @@ class HttpServer {
         // 向服务器发送请求时返回响应
         // 可以获取请求参数，也可以设置响应头和响应内容
         self::$server->on('Request', [$this,"onRequest"]);
+
+        self::$server->on('Receive', [$this,"onReceive"]);
     }
 
     //覆盖公共方法，防止外部克隆
@@ -54,6 +56,11 @@ class HttpServer {
     public function OnRequest($request, $response){
         $response->header("Content-Type", "text/plain");
         $response->end("Hello World\n");
+    }
+
+    public function onReceive($server, $fd, $from_id, $data){
+        $server->send($fd, 'Swoole: ' . $data);
+        $server->close($fd);
     }
 
     public function start(){
